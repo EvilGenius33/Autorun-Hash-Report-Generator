@@ -1,0 +1,47 @@
+# ===============================
+# Autorun Hash Report Generator
+# Usage: Defensive, Local Only
+# Author: Xenoz
+# ===============================
+
+$report = "$env:USERPROFILE\Desktop\autorun_hash_report.txt"
+$runKeys = @(
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+)
+
+function Get-FileHashIfExists {
+    param ($path)
+    if (Test-Path $path) {
+        try {
+            return (Get-FileHash -Path $path -Algorithm SHA256).Hash
+        } catch {
+            return "ERROR: Cannot hash"
+        }
+    } else {
+        return "NOT FOUND"
+    }
+}
+
+Add-Content -Path $report -Value "=== Autorun Hash Report ==="
+Add-Content -Path $report -Value "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n"
+
+foreach ($key in $runKeys) {
+    Add-Content -Path $report -Value "`n[$key]"
+    try {
+        $items = Get-ItemProperty -Path $key -ErrorAction Stop
+        foreach ($prop in $items.PSObject.Properties) {
+            if ($prop.Name -notlike "PS*") {
+                $entryName = $prop.Name
+                $rawPath = $prop.Value -replace '"', ''
+                $exe = $rawPath -split ' ' | Select-Object -First 1
+                $hash = Get-FileHashIfExists $exe
+                Add-Content -Path $report -Value "$entryName → $exe → SHA256: $hash"
+            }
+        }
+    } catch {
+        Add-Content -Path $report -Value "ERROR: Cannot access $key"
+    }
+}
+
+Write-Host "[+] Report generated: $report" -ForegroundColor Green
